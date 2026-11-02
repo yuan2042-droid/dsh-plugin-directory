@@ -21,6 +21,7 @@
 | 搜索 | 名称 / 仓库 / 描述 / 标签 / 分类名，空格分词，全部命中 |
 | 视图 | 卡片、表格 |
 | 详情 | 指标、时间、标签、仓库链接、复制安装命令 |
+| 一键安装 | 详情里直接调宿主插件管理器（`ctx.remote.pluginManager.installBundle`）装 `github:owner/repo`，与「设置 → 插件」同一条链路；失败会把宿主返回的原因显示在弹窗里 |
 | 零网络 | 数据在构建期打进 `client.js`，运行时不需要请求 GitHub，也没有第三方脚本 |
 
 ## 安装
@@ -123,6 +124,11 @@ window.__ModuleLoader__.load({
 面板用两个槽位：`sidebar.panellist`（左栏图标）与 `main`（中央面板），**两边的 `id` / `key` 必须同名**，否则 `layout.selectPanel(id)` 反查不到对应面板会抛错；关闭面板用 `layout.selectPanel(null)`。
 
 依赖的宿主服务只有 `slots` 与 `layout`；没有 `layout.selectPanel` 的宿主（0.1.5 以前的 web）不会注册半个面板，只在 console 里说明原因。
+
+## 更新记录
+
+- **0.2.0** — 详情弹窗重做：实心表面（按宿主背景亮度自动切换深浅两种配色）、标题/描述排版、hover 与按下反馈、`×` 关闭与点击遮罩关闭；新增**一键安装**，调用宿主 `pluginManager.installBundle('github:owner/repo', { enabled: true })`，安装中/成功/失败三态都显示在弹窗里，失败时同时给出可直接复制的命令；卡片与分类标签补了 hover 过渡。
+- **0.1.0** — 首个版本：648 个插件、15 个分类、搜索/多维排序/卡片与表格视图、详情抽屉。
 
 ## 兼容性
 

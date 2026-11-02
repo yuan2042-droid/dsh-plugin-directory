@@ -13,6 +13,9 @@
  * 数据在构建期由 tools/build.mjs 注入（注入点是下面的 `const CATALOG` 与
  * `const GENERATED_AT` 两行），运行时零网络请求；想更新数据就重跑构建脚本，
  * 或等仓库发新版本。
+ *
+ * 一键安装走宿主自己的插件管理 RPC：`ctx.remote.pluginManager.installBundle(spec, { enabled })`，
+ * 与设置页「插件」用的是同一条路径；宿主没有这个接口时只保留复制命令。
  */
 window.__ModuleLoader__.load({
   id: 'dsh-plugin-directory',
@@ -26,7 +29,7 @@ window.__ModuleLoader__.load({
     const GENERATED_AT = '__GENERATED_AT__'
 
     /* ------------------------------------------------------------------ *
-     * 分类（与数据里的 c 字段对应）
+     * 分类
      * ------------------------------------------------------------------ */
     const CATS = [
       ['official', '官方与核心', '#3fd0a4'],
@@ -84,6 +87,36 @@ window.__ModuleLoader__.load({
     }
 
     /* ------------------------------------------------------------------ *
+     * 主题变量：按宿主实际背景色决定弹窗这类实心表面的配色
+     * ------------------------------------------------------------------ */
+    function applyThemeVars() {
+      if (typeof document === 'undefined' || !document.body) return
+      const bg = getComputedStyle(document.body).backgroundColor || ''
+      const nums = bg.match(/[\d.]+/g)
+      const dark = !nums || nums.length < 3
+        ? true
+        : (0.299 * Number(nums[0]) + 0.587 * Number(nums[1]) + 0.114 * Number(nums[2])) < 128
+      const s = document.documentElement.style
+      if (dark) {
+        s.setProperty('--dcat-surface', '#1c2128')
+        s.setProperty('--dcat-surface-2', 'rgba(255,255,255,0.06)')
+        s.setProperty('--dcat-line', 'rgba(255,255,255,0.13)')
+        s.setProperty('--dcat-text', '#e9eff7')
+        s.setProperty('--dcat-muted', 'rgba(233,239,247,0.6)')
+        s.setProperty('--dcat-mask', 'rgba(4,7,11,0.6)')
+        s.setProperty('--dcat-shadow', '0 24px 60px rgba(0,0,0,0.55)')
+      } else {
+        s.setProperty('--dcat-surface', '#ffffff')
+        s.setProperty('--dcat-surface-2', 'rgba(15,25,40,0.05)')
+        s.setProperty('--dcat-line', 'rgba(15,25,40,0.14)')
+        s.setProperty('--dcat-text', '#1b2431')
+        s.setProperty('--dcat-muted', 'rgba(27,36,49,0.6)')
+        s.setProperty('--dcat-mask', 'rgba(18,26,38,0.38)')
+        s.setProperty('--dcat-shadow', '0 24px 60px rgba(20,32,50,0.22)')
+      }
+    }
+
+    /* ------------------------------------------------------------------ *
      * 样式（只注入一次；前缀统一 dcat-，避免污染宿主）
      * ------------------------------------------------------------------ */
     const STYLE = [
@@ -93,26 +126,28 @@ window.__ModuleLoader__.load({
       '.dcat-title{display:flex;flex-direction:column;margin-right:auto;min-width:140px}',
       '.dcat-h{font-size:15px;font-weight:650;letter-spacing:.2px}',
       '.dcat-sub{font-size:11px;opacity:.55}',
-      '.dcat-search{height:30px;min-width:200px;flex:0 1 260px;padding:0 10px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.1);color:inherit;outline:none;font-size:12.5px}',
-      '.dcat-search:focus{border-color:rgba(47,185,138,.8)}',
+      '.dcat-search{height:30px;min-width:200px;flex:0 1 250px;padding:0 10px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.1);color:inherit;outline:none;font-size:12.5px}',
+      '.dcat-search:focus{border-color:rgba(47,185,138,.85);box-shadow:0 0 0 3px rgba(47,185,138,.15)}',
       '.dcat-sel{height:30px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:rgba(128,128,128,.1);color:inherit;font-size:12px;padding:0 6px;outline:none}',
       '.dcat-sel option{color:#111}',
-      '.dcat-btn{height:30px;min-width:30px;padding:0 9px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:transparent;color:inherit;font-size:12.5px;cursor:pointer;line-height:1}',
-      '.dcat-btn:hover{background:rgba(128,128,128,.16)}',
+      '.dcat-btn{height:30px;min-width:30px;padding:0 10px;border-radius:8px;border:1px solid rgba(128,128,128,.3);background:transparent;color:inherit;font-size:12.5px;cursor:pointer;line-height:1;transition:background .12s,border-color .12s,transform .05s}',
+      '.dcat-btn:hover{background:rgba(128,128,128,.16);border-color:rgba(128,128,128,.5)}',
+      '.dcat-btn:active{transform:translateY(1px)}',
       '.dcat-seg{display:flex;border:1px solid rgba(128,128,128,.3);border-radius:8px;overflow:hidden}',
-      '.dcat-seg-b{height:28px;padding:0 10px;border:0;background:transparent;color:inherit;opacity:.6;font-size:12px;cursor:pointer}',
+      '.dcat-seg-b{height:28px;padding:0 10px;border:0;background:transparent;color:inherit;opacity:.6;font-size:12px;cursor:pointer;transition:background .12s,opacity .12s}',
       '.dcat-seg-b+.dcat-seg-b{border-left:1px solid rgba(128,128,128,.22)}',
+      '.dcat-seg-b:hover{opacity:.9;background:rgba(128,128,128,.12)}',
       '.dcat-seg-b.on{opacity:1;background:rgba(47,185,138,.18);color:#2fb98a;font-weight:600}',
       '.dcat-chips{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:2px}',
-      '.dcat-chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:999px;border:1px solid rgba(128,128,128,.26);background:transparent;color:inherit;font-size:11.5px;cursor:pointer;opacity:.8}',
+      '.dcat-chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:999px;border:1px solid rgba(128,128,128,.26);background:transparent;color:inherit;font-size:11.5px;cursor:pointer;opacity:.8;transition:opacity .12s,background .12s,border-color .12s}',
       '.dcat-chip:hover{opacity:1;background:rgba(128,128,128,.12)}',
       '.dcat-chip.on{opacity:1;border-color:rgba(47,185,138,.65);background:rgba(47,185,138,.15);color:#2fb98a}',
       '.dcat-chip i{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}',
       '.dcat-chip b{font-weight:500;opacity:.6}',
       '.dcat-body{flex:1;min-height:0;overflow:auto;padding-right:2px}',
       '.dcat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(295px,1fr));gap:10px;padding-bottom:6px}',
-      '.dcat-card{display:flex;flex-direction:column;gap:7px;padding:11px 12px;border-radius:11px;border:1px solid rgba(128,128,128,.22);background:rgba(128,128,128,.05);cursor:pointer}',
-      '.dcat-card:hover{border-color:rgba(47,185,138,.55);background:rgba(47,185,138,.08)}',
+      '.dcat-card{display:flex;flex-direction:column;gap:7px;padding:11px 12px;border-radius:11px;border:1px solid rgba(128,128,128,.22);background:rgba(128,128,128,.05);cursor:pointer;transition:border-color .12s,background .12s,transform .12s}',
+      '.dcat-card:hover{border-color:rgba(47,185,138,.55);background:rgba(47,185,138,.08);transform:translateY(-1px)}',
       '.dcat-card-top{display:flex;align-items:flex-start;gap:8px}',
       '.dcat-names{flex:1;min-width:0}',
       '.dcat-name{font-size:13px;font-weight:650;word-break:break-word}',
@@ -128,17 +163,34 @@ window.__ModuleLoader__.load({
       '.dcat-more{display:block;margin:4px auto 10px;padding:6px 14px;border-radius:9px;border:1px solid rgba(128,128,128,.3);background:transparent;color:inherit;font-size:12px;cursor:pointer}',
       '.dcat-more:hover{background:rgba(128,128,128,.14)}',
       '.dcat-foot{font-size:11px;opacity:.5}',
-      '.dcat-detail{position:absolute;inset:0;background:rgba(10,14,18,.45);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9}',
-      '.dcat-detail-box{width:100%;max-width:560px;max-height:82%;overflow:auto;border-radius:14px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.16);backdrop-filter:blur(22px) saturate(1.1);padding:16px 18px}',
-      '.dcat-detail-box h3{margin:0 0 2px;font-size:16px}',
-      '.dcat-detail-box .dcat-repo{margin-bottom:10px}',
-      '.dcat-detail-box p{font-size:12.5px;opacity:.8;line-height:1.65;margin:0 0 12px;white-space:pre-wrap}',
-      '.dcat-kv{display:grid;grid-template-columns:76px 1fr;gap:5px 10px;font-size:11.5px}',
-      '.dcat-kv dt{opacity:.5}',
+
+      /* ---- 详情弹窗 ---- */
+      '.dcat-mask{position:absolute;inset:0;z-index:20;background:var(--dcat-mask);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px;animation:dcat-fade .12s ease-out}',
+      '@keyframes dcat-fade{from{opacity:0}to{opacity:1}}',
+      '.dcat-modal{position:relative;width:100%;max-width:560px;max-height:84%;display:flex;flex-direction:column;border-radius:16px;border:1px solid var(--dcat-line);background:var(--dcat-surface);color:var(--dcat-text);box-shadow:var(--dcat-shadow);animation:dcat-pop .14s ease-out;overflow:hidden}',
+      '@keyframes dcat-pop{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}',
+      '.dcat-modal-head{display:flex;align-items:flex-start;gap:12px;padding:20px 20px 0}',
+      '.dcat-modal-title{font-size:17px;font-weight:700;line-height:1.35;word-break:break-word;margin:0}',
+      '.dcat-modal-sub{font-size:11.5px;color:var(--dcat-muted);word-break:break-all;margin-top:3px}',
+      '.dcat-close{flex:none;width:30px;height:30px;border-radius:8px;border:1px solid var(--dcat-line);background:transparent;color:var(--dcat-muted);font-size:16px;line-height:1;cursor:pointer}',
+      '.dcat-close:hover{background:var(--dcat-surface-2);color:var(--dcat-text)}',
+      '.dcat-modal-body{padding:14px 20px 18px;overflow:auto}',
+      '.dcat-modal-desc{font-size:12.5px;line-height:1.75;color:var(--dcat-text);opacity:.88;white-space:pre-wrap;margin:0 0 14px}',
+      '.dcat-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}',
+      '.dcat-primary{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:9px;border:1px solid rgba(47,185,138,.75);background:#1f9d76;color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:background .12s,transform .05s,opacity .12s}',
+      '.dcat-primary:hover{background:#25b184}',
+      '.dcat-primary:active{transform:translateY(1px)}',
+      '.dcat-primary[disabled]{opacity:.55;cursor:default;transform:none}',
+      '.dcat-ghost{display:inline-flex;align-items:center;height:34px;padding:0 13px;border-radius:9px;border:1px solid var(--dcat-line);background:var(--dcat-surface-2);color:var(--dcat-text);font-size:12.5px;cursor:pointer;text-decoration:none;transition:background .12s,border-color .12s}',
+      '.dcat-ghost:hover{background:rgba(128,128,128,.18);border-color:rgba(128,128,128,.45)}',
+      '.dcat-status{margin:2px 0 12px;padding:9px 11px;border-radius:9px;font-size:12px;line-height:1.6;border:1px solid var(--dcat-line);background:var(--dcat-surface-2)}',
+      '.dcat-status.ok{border-color:rgba(47,185,138,.6);background:rgba(47,185,138,.14);color:#2fb98a}',
+      '.dcat-status.err{border-color:rgba(248,81,73,.6);background:rgba(248,81,73,.12);color:#ff8078}',
+      '.dcat-status code{font-family:"Cascadia Mono",Consolas,monospace;font-size:11px;word-break:break-all}',
+      '.dcat-kv{display:grid;grid-template-columns:78px 1fr;gap:7px 12px;font-size:12px}',
+      '.dcat-kv dt{color:var(--dcat-muted)}',
       '.dcat-kv dd{margin:0;word-break:break-word}',
-      '.dcat-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}',
-      '.dcat-link{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:8px;border:1px solid rgba(47,185,138,.6);background:rgba(47,185,138,.16);color:#2fb98a;text-decoration:none;font-size:12.5px;font-weight:600}',
-      '.dcat-link:hover{background:rgba(47,185,138,.26)}'
+      '.dcat-hint{font-size:11px;color:var(--dcat-muted);line-height:1.6;margin-top:10px}'
     ].join('\n')
 
     function installStyles() {
@@ -210,36 +262,91 @@ window.__ModuleLoader__.load({
     function Detail(props) {
       const r = props.row
       const c = catOf(r.c)
-      const install = 'dsh plugin add github:' + r.r
-      return h('div', { className: 'dcat-detail', onClick: props.onClose },
-        h('div', { className: 'dcat-detail-box', onClick: (e) => e.stopPropagation() },
-          h('h3', null, r.n, ' ',
-            h('span', { className: 'dcat-tag', style: { color: c.color, borderColor: c.color + '66', verticalAlign: 'middle' } }, c.name)),
-          h('div', { className: 'dcat-repo' }, r.r),
-          h('p', null, r.d || '（该仓库暂无描述）'),
-          h('div', { className: 'dcat-actions' },
-            h('a', { className: 'dcat-link', href: r.u, target: '_blank', rel: 'noopener noreferrer' }, '打开 GitHub 仓库'),
-            h('button', {
-              className: 'dcat-btn',
-              onClick: () => {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                  navigator.clipboard.writeText(install).then(() => { props.toast('已复制安装命令') }, () => { props.toast('复制失败，命令：' + install) })
-                } else {
-                  props.toast('安装命令：' + install)
-                }
-              }
-            }, '复制安装命令')
+      const [phase, setPhase] = react.useState('idle')   // idle | running | done | error
+      const [msg, setMsg] = react.useState('')
+      const spec = 'github:' + r.r
+
+      const canInstall = !!(props.manager && typeof props.manager.installBundle === 'function')
+
+      const install = () => {
+        if (!canInstall || phase === 'running') return
+        setPhase('running')
+        setMsg('正在安装 ' + spec + ' …（GitHub 源会先做连通性检查）')
+        Promise.resolve()
+          .then(() => props.manager.installBundle(spec, { enabled: true }))
+          .then((res) => {
+            if (res && res.ok) {
+              setPhase('done')
+              setMsg('已安装 ' + r.n + '。刷新页面或重启应用后生效。')
+            } else {
+              const err = (res && res.error) || {}
+              setPhase('error')
+              setMsg('安装失败：' + (err.message || err.code || '未知错误'))
+            }
+          })
+          .catch((e) => {
+            setPhase('error')
+            setMsg('安装失败：' + String((e && e.message) || e))
+          })
+      }
+
+      const copy = (text) => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(
+            () => setMsg('已复制：' + text),
+            () => setMsg('复制失败，请手动复制：' + text)
+          )
+        } else {
+          setMsg('请手动复制：' + text)
+        }
+      }
+
+      return h('div', { className: 'dcat-mask', onClick: props.onClose },
+        h('div', { className: 'dcat-modal', onClick: (e) => e.stopPropagation() },
+          h('div', { className: 'dcat-modal-head' },
+            h('div', { style: { flex: 1, minWidth: 0 } },
+              h('h3', { className: 'dcat-modal-title' }, r.n),
+              h('div', { className: 'dcat-modal-sub' },
+                r.r, ' · ',
+                h('span', { style: { color: c.color } }, c.name),
+                r.o ? ' · 官方' : ''
+              )
+            ),
+            h('button', { className: 'dcat-close', title: '关闭', onClick: props.onClose }, '×')
           ),
-          h('dl', { className: 'dcat-kv' },
-            h('dt', null, 'Star'), h('dd', null, String(r.s || 0)),
-            h('dt', null, 'Fork'), h('dd', null, String(r.f || 0)),
-            h('dt', null, 'Issue'), h('dd', null, String(r.i || 0)),
-            h('dt', null, '语言'), h('dd', null, r.l || '—'),
-            h('dt', null, '最近更新'), h('dd', null, rel(r.p) + '（' + String(r.p || '').slice(0, 10) + '）'),
-            h('dt', null, '标签'), h('dd', null, (r.t || []).length ? (r.t || []).join('、') : '—')
-          ),
-          h('div', { className: 'dcat-actions' },
-            h('button', { className: 'dcat-btn', onClick: props.onClose }, '关闭')
+          h('div', { className: 'dcat-modal-body' },
+            h('p', { className: 'dcat-modal-desc' }, r.d || '（该仓库暂无描述）'),
+            h('div', { className: 'dcat-actions' },
+              h('button', {
+                className: 'dcat-primary',
+                disabled: !canInstall || phase === 'running',
+                title: canInstall ? '调用宿主插件管理器安装' : '当前宿主没有插件管理接口',
+                onClick: install
+              }, phase === 'running' ? '安装中…' : '一键安装'),
+              h('button', { className: 'dcat-ghost', onClick: () => copy('dsh plugin add ' + spec) }, '复制安装命令'),
+              h('a', { className: 'dcat-ghost', href: r.u, target: '_blank', rel: 'noopener noreferrer' }, '打开 GitHub ↗')
+            ),
+            (phase === 'running' || msg)
+              ? h('div', { className: 'dcat-status' + (phase === 'done' ? ' ok' : phase === 'error' ? ' err' : '') },
+                  h('div', null, msg),
+                  (phase === 'error' || phase === 'idle')
+                    ? h('div', { style: { marginTop: 6 } }, h('code', null, 'dsh plugin add ' + spec))
+                    : null
+                )
+              : null,
+            h('dl', { className: 'dcat-kv' },
+              h('dt', null, 'Star'), h('dd', null, String(r.s || 0)),
+              h('dt', null, 'Fork'), h('dd', null, String(r.f || 0)),
+              h('dt', null, 'Issue'), h('dd', null, String(r.i || 0)),
+              h('dt', null, '语言'), h('dd', null, r.l || '—'),
+              h('dt', null, '最近更新'), h('dd', null, rel(r.p) + '（' + String(r.p || '').slice(0, 10) + '）'),
+              h('dt', null, '标签'), h('dd', null, (r.t || []).length ? (r.t || []).join('、') : '—')
+            ),
+            h('div', { className: 'dcat-hint' },
+              canInstall
+                ? '一键安装用的就是宿主插件管理器（与「设置 → 插件」同一套 RPC），安装源是 github:仓库名。若该仓库根目录没有 package.json、或安装脚本被 pnpm 拦下，会在这里显示宿主返回的原因；那时请改用 README 里的 npm 包名。'
+                : '当前宿主没有暴露 pluginManager.installBundle，只能用命令行安装（上面的命令）。'
+            )
           )
         )
       )
@@ -253,7 +360,6 @@ window.__ModuleLoader__.load({
       const [view, setView] = react.useState('cards')
       const [limit, setLimit] = react.useState(120)
       const [detail, setDetail] = react.useState(null)
-      const [toast, setToast] = react.useState('')
 
       const counts = react.useMemo(() => {
         const m = {}
@@ -294,12 +400,6 @@ window.__ModuleLoader__.load({
         })
         return out
       }, [q, cat, sort, dir])
-
-      react.useEffect(() => {
-        if (!toast) return undefined
-        const t = setTimeout(() => setToast(''), 1600)
-        return () => clearTimeout(t)
-      }, [toast])
 
       const shown = rows.slice(0, limit)
 
@@ -396,8 +496,8 @@ window.__ModuleLoader__.load({
           body,
           rows.length === 0 ? h('div', { style: { padding: '30px 0', textAlign: 'center', opacity: .6 } }, '没有符合条件的插件') : null
         ),
-        h('div', { className: 'dcat-foot' }, '共 ' + rows.length + ' 条结果' + (rows.length > shown.length ? '，已显示 ' + shown.length : '') + ' · 数据来自 GitHub，安装以各仓库 README 为准' + (toast ? ' · ' + toast : '')),
-        detail ? h(Detail, { row: detail, onClose: () => setDetail(null), toast: setToast }) : null
+        h('div', { className: 'dcat-foot' }, '共 ' + rows.length + ' 条结果' + (rows.length > shown.length ? '，已显示 ' + shown.length : '') + ' · 数据来自 GitHub，安装以各仓库 README 为准'),
+        detail ? h(Detail, { row: detail, onClose: () => setDetail(null), manager: props.manager }) : null
       )
     }
 
@@ -408,7 +508,25 @@ window.__ModuleLoader__.load({
 
     exports.apply = function apply(ctx) {
       installStyles()
+      applyThemeVars()
+
+      // 宿主切主题时重新取一次表面配色（观察 <html> 属性变化，节流到下一帧）
+      try {
+        if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+          let queued = false
+          const obs = new MutationObserver(() => {
+            if (queued) return
+            queued = true
+            requestAnimationFrame(() => { queued = false; applyThemeVars() })
+          })
+          obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] })
+        }
+      } catch (e) {
+        // 跟随主题失败不影响主功能
+      }
+
       const layout = (ctx && typeof ctx.get === 'function') ? ctx.get('layout') : null
+      const manager = (ctx && ctx.remote && ctx.remote.pluginManager) || null
 
       if (!layout || typeof layout.selectPanel !== 'function') {
         // 宿主没有布局服务（很旧的版本或非 web 平台）：不注册半个面板，直接说明原因
@@ -425,7 +543,7 @@ window.__ModuleLoader__.load({
 
       ctx.slots.inject('main', () => ctx.slots.register(
         { name: 'main', key: PANEL_ID },
-        () => h(Panel, { onClose: () => layout.selectPanel(null) })
+        () => h(Panel, { manager, onClose: () => layout.selectPanel(null) })
       ))
     }
 
