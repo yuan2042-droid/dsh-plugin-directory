@@ -1,0 +1,8 @@
+# dsh-plugin-directory —— 组合包 patch
+#
+# Host 半身挂一行（提供插件加载时的一次初始化日志），浏览器半身由 package.json
+# 的 dsh.client 声明：Host 会把 ./client.js 作为模块 serve 进 boot graph，
+# 浏览器侧再通过 __ModuleLoader__ 注册 sidebar.panellist + main 两个槽位。
+- insert:
+    - id: plugin-directory
+      name: dsh-plugin-directory

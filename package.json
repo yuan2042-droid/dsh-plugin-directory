@@ -1,0 +1,39 @@
+{
+  "name": "dsh-plugin-directory",
+  "version": "0.1.0",
+  "description": "DSH 插件目录：在 DeepSeek Harness 侧边栏里浏览、搜索、排序 GitHub 上的社区插件（含分类与星标/更新时间等多维排序）。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "icon": "./icon.svg",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "catalog",
+    "directory",
+    "marketplace"
+  ],
+  "license": "MIT"
+}
