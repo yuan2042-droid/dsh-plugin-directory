@@ -89,30 +89,38 @@ window.__ModuleLoader__.load({
     /* ------------------------------------------------------------------ *
      * 主题变量：按宿主实际背景色决定弹窗这类实心表面的配色
      * ------------------------------------------------------------------ */
+    const THEME_DARK = {
+      '--dcat-surface': '#1c2128',
+      '--dcat-surface-2': 'rgba(255,255,255,0.06)',
+      '--dcat-line': 'rgba(255,255,255,0.13)',
+      '--dcat-text': '#e9eff7',
+      '--dcat-muted': 'rgba(233,239,247,0.6)',
+      '--dcat-mask': 'rgba(4,7,11,0.6)',
+      '--dcat-shadow': '0 24px 60px rgba(0,0,0,0.55)'
+    }
+    const THEME_LIGHT = {
+      '--dcat-surface': '#ffffff',
+      '--dcat-surface-2': 'rgba(15,25,40,0.05)',
+      '--dcat-line': 'rgba(15,25,40,0.14)',
+      '--dcat-text': '#1b2431',
+      '--dcat-muted': 'rgba(27,36,49,0.6)',
+      '--dcat-mask': 'rgba(18,26,38,0.38)',
+      '--dcat-shadow': '0 24px 60px rgba(20,32,50,0.22)'
+    }
+
     function applyThemeVars() {
       if (typeof document === 'undefined' || !document.body) return
-      const bg = getComputedStyle(document.body).backgroundColor || ''
-      const nums = bg.match(/[\d.]+/g)
-      const dark = !nums || nums.length < 3
-        ? true
-        : (0.299 * Number(nums[0]) + 0.587 * Number(nums[1]) + 0.114 * Number(nums[2])) < 128
-      const s = document.documentElement.style
-      if (dark) {
-        s.setProperty('--dcat-surface', '#1c2128')
-        s.setProperty('--dcat-surface-2', 'rgba(255,255,255,0.06)')
-        s.setProperty('--dcat-line', 'rgba(255,255,255,0.13)')
-        s.setProperty('--dcat-text', '#e9eff7')
-        s.setProperty('--dcat-muted', 'rgba(233,239,247,0.6)')
-        s.setProperty('--dcat-mask', 'rgba(4,7,11,0.6)')
-        s.setProperty('--dcat-shadow', '0 24px 60px rgba(0,0,0,0.55)')
-      } else {
-        s.setProperty('--dcat-surface', '#ffffff')
-        s.setProperty('--dcat-surface-2', 'rgba(15,25,40,0.05)')
-        s.setProperty('--dcat-line', 'rgba(15,25,40,0.14)')
-        s.setProperty('--dcat-text', '#1b2431')
-        s.setProperty('--dcat-muted', 'rgba(27,36,49,0.6)')
-        s.setProperty('--dcat-mask', 'rgba(18,26,38,0.38)')
-        s.setProperty('--dcat-shadow', '0 24px 60px rgba(20,32,50,0.22)')
+      try {
+        const bg = getComputedStyle(document.body).backgroundColor || ''
+        const nums = bg.match(/[\d.]+/g)
+        const dark = !nums || nums.length < 3
+          ? true
+          : (0.299 * Number(nums[0]) + 0.587 * Number(nums[1]) + 0.114 * Number(nums[2])) < 128
+        const palette = dark ? THEME_DARK : THEME_LIGHT
+        const s = document.documentElement.style
+        Object.keys(palette).forEach((k) => s.setProperty(k, palette[k]))
+      } catch (e) {
+        // 取不到宿主背景色时保留默认配色，绝不让取色失败影响插件加载
       }
     }
 
@@ -262,14 +270,23 @@ window.__ModuleLoader__.load({
     function Detail(props) {
       const r = props.row
       const c = catOf(r.c)
-      const [phase, setPhase] = react.useState('idle')   // idle | running | done | error
+      const [phase, setPhase] = react.useState('idle')   // idle | confirm | running | done | error
       const [msg, setMsg] = react.useState('')
       const spec = 'github:' + r.r
 
-      const canInstall = !!(props.manager && typeof props.manager.installBundle === 'function')
+      // 这些仓库装进 profile 会出事：内核本体、精选列表（没有包）、桌面端应用
+      const BLOCKED = /^(?:deepseek-ai\/deepseek-harness|awesome[-/].*|harness[-/]awesome.*|.*[-/](?:awesome|desktop|desktop-app|web|market-site))$/i
+      const blocked = BLOCKED.test(r.r)
+      const hasManager = !!(props.manager && typeof props.manager.installBundle === 'function')
+      const canInstall = hasManager && !blocked
 
       const install = () => {
         if (!canInstall || phase === 'running') return
+        if (phase !== 'confirm') {
+          setPhase('confirm')
+          setMsg('')
+          return
+        }
         setPhase('running')
         setMsg('正在安装 ' + spec + ' …（GitHub 源会先做连通性检查）')
         Promise.resolve()
@@ -277,11 +294,12 @@ window.__ModuleLoader__.load({
           .then((res) => {
             if (res && res.ok) {
               setPhase('done')
-              setMsg('已安装 ' + r.n + '。刷新页面或重启应用后生效。')
+              setMsg('已安装 ' + r.n + '。刷新页面或重启应用后生效；若启动时报错，可在启动失败界面选择「调整插件」把它关掉。')
             } else {
               const err = (res && res.error) || {}
+              const detail = err.diagnostic || (err.code && err.code !== err.message ? '（' + err.code + '）' : '')
               setPhase('error')
-              setMsg('安装失败：' + (err.message || err.code || '未知错误'))
+              setMsg('安装失败：' + (err.message || err.code || '未知错误') + (detail ? ' ' + detail : ''))
             }
           })
           .catch((e) => {
@@ -320,18 +338,30 @@ window.__ModuleLoader__.load({
               h('button', {
                 className: 'dcat-primary',
                 disabled: !canInstall || phase === 'running',
-                title: canInstall ? '调用宿主插件管理器安装' : '当前宿主没有插件管理接口',
+                title: blocked
+                  ? '这类仓库装进 profile 会破坏启动，已禁用'
+                  : (hasManager ? '调用宿主插件管理器安装（点一下先确认）' : '当前宿主没有插件管理接口'),
                 onClick: install
-              }, phase === 'running' ? '安装中…' : '一键安装'),
+              }, phase === 'running' ? '安装中…' : phase === 'confirm' ? '确认安装' : '一键安装'),
+              phase === 'confirm'
+                ? h('button', { className: 'dcat-ghost', onClick: () => { setPhase('idle'); setMsg('') } }, '取消')
+                : null,
               h('button', { className: 'dcat-ghost', onClick: () => copy('dsh plugin add ' + spec) }, '复制安装命令'),
               h('a', { className: 'dcat-ghost', href: r.u, target: '_blank', rel: 'noopener noreferrer' }, '打开 GitHub ↗')
             ),
-            (phase === 'running' || msg)
+            (phase === 'running' || (msg && phase !== 'confirm'))
               ? h('div', { className: 'dcat-status' + (phase === 'done' ? ' ok' : phase === 'error' ? ' err' : '') },
                   h('div', null, msg),
-                  (phase === 'error' || phase === 'idle')
+                  phase === 'error'
                     ? h('div', { style: { marginTop: 6 } }, h('code', null, 'dsh plugin add ' + spec))
                     : null
+                )
+              : null,
+            phase === 'confirm'
+              ? h('div', { className: 'dcat-status err' },
+                  h('div', null, '确认把 ', h('code', null, spec), ' 安装进当前 profile？'),
+                  h('div', { style: { marginTop: 6 } },
+                    '如果该仓库根目录不是 DSH 组合包（没有 dsh.bundle 声明），装进去后 harness 可能启动失败。真失败了，harness 会在启动报错界面提供「调整插件」，可以把它关掉再启动。')
                 )
               : null,
             h('dl', { className: 'dcat-kv' },
@@ -343,9 +373,11 @@ window.__ModuleLoader__.load({
               h('dt', null, '标签'), h('dd', null, (r.t || []).length ? (r.t || []).join('、') : '—')
             ),
             h('div', { className: 'dcat-hint' },
-              canInstall
-                ? '一键安装用的就是宿主插件管理器（与「设置 → 插件」同一套 RPC），安装源是 github:仓库名。若该仓库根目录没有 package.json、或安装脚本被 pnpm 拦下，会在这里显示宿主返回的原因；那时请改用 README 里的 npm 包名。'
-                : '当前宿主没有暴露 pluginManager.installBundle，只能用命令行安装（上面的命令）。'
+              blocked
+                ? '这个仓库被判定为「不适合装进 profile」（内核本体 / 精选列表 / 桌面端应用），一键安装已禁用；需要的话用上方的复制命令手动处理，并在安装前确认它确实是 DSH 组合包。'
+                : hasManager
+                  ? '一键安装调用宿主插件管理器（与「设置 → 插件」同一套 RPC），安装源是 github:仓库名，点一次先确认再执行。若该仓库根目录没有 package.json、或安装脚本被 pnpm 拦下，弹窗会显示宿主返回的原因。'
+                  : '当前宿主没有暴露 pluginManager.installBundle，只能用命令行安装（上面的命令）。'
             )
           )
         )
@@ -526,7 +558,17 @@ window.__ModuleLoader__.load({
       }
 
       const layout = (ctx && typeof ctx.get === 'function') ? ctx.get('layout') : null
-      const manager = (ctx && ctx.remote && ctx.remote.pluginManager) || null
+      // 宿主插件管理 RPC：拿不到就禁用一键安装，绝不让取服务失败影响加载
+      let manager = null
+      try {
+        const remote = (ctx && typeof ctx.get === 'function' ? ctx.get('remote') : null) ||
+          (ctx && ctx.remote) || null
+        if (remote && remote.pluginManager && typeof remote.pluginManager.installBundle === 'function') {
+          manager = remote.pluginManager
+        }
+      } catch (e) {
+        manager = null
+      }
 
       if (!layout || typeof layout.selectPanel !== 'function') {
         // 宿主没有布局服务（很旧的版本或非 web 平台）：不注册半个面板，直接说明原因

@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-directory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "DSH 插件目录：在 DeepSeek Harness 侧边栏里浏览、搜索、排序 GitHub 上的社区插件（含分类与星标/更新时间等多维排序）。",
   "type": "module",
   "main": "index.js",
