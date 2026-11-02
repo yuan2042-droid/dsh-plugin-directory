@@ -74,6 +74,7 @@ def main():
     parser.add_argument("--branch", default="main")
     parser.add_argument("--private", action="store_true", help="建私有仓")
     parser.add_argument("--dry-run", action="store_true", help="只列出要上传的文件")
+    parser.add_argument("--message", default="feat: DSH 插件目录 v0.1.0", help="提交信息")
     args = parser.parse_args()
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -153,7 +154,7 @@ def main():
         parents = [ref["object"]["sha"]]
 
     status, commit = call("POST", f"/repos/{full_name}/git/commits", token, {
-        "message": "feat: DSH 插件目录 v0.1.0",
+        "message": args.message,
         "tree": new_tree["sha"],
         "parents": parents,
     })

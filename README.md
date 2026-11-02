@@ -25,20 +25,31 @@
 
 ## 安装
 
-### DSH Desktop
-
-打开 **设置 → 插件**，搜索 `dsh-plugin-directory` 安装；或用命令行装进桌面端使用的 profile 后重启应用：
+**推荐：Release 里的离线包**（不需要 git，也不需要构建权限）
 
 ```powershell
-dsh plugin --profile desktop add github:<你的用户名>/dsh-plugin-directory
+dsh plugin --profile web add https://github.com/yuan2042-droid/dsh-plugin-directory/releases/download/v0.1.0/dsh-plugin-directory-0.1.0.tgz
+# 桌面端把 web 换成 desktop，然后重启应用
 ```
+
+### DSH Desktop
+
+打开 **设置 → 插件**，搜索 `dsh-plugin-directory` 安装；或用上面那条命令（`--profile desktop`）装进桌面端 profile 后重启应用。
 
 ### 普通 `dsh web`
 
 ```powershell
-dsh plugin --profile web add github:<你的用户名>/dsh-plugin-directory
+dsh plugin --profile web add https://github.com/yuan2042-droid/dsh-plugin-directory/releases/download/v0.1.0/dsh-plugin-directory-0.1.0.tgz
 # 然后重启 dsh web
 ```
+
+### 从源码仓库安装
+
+```powershell
+dsh plugin --profile web add github:yuan2042-droid/dsh-plugin-directory
+```
+
+这条要求本机有 **git**，且 pnpm ≥10 默认拦下 git 依赖的构建脚本，首次会失败并提示把包键写进 profile 的 `pnpm-workspace.yaml` 的 `allowBuilds`——本包没有 `prepare` 脚本，构建产物 `client.js` 已随仓库提交，只是链路比离线包长。
 
 ### 本地 checkout（开发用）
 
@@ -49,7 +60,7 @@ dsh --profile demo --dump-config   # 应能看到 "# == dsh-plugin-directory" �
 
 装好后在左侧栏点「插件目录」。
 
-> 从 GitHub 直接安装拉到的是**源码**；本仓库把构建产物 `client.js` 一并提交了，所以不需要在安装时跑构建脚本、也不需要给 pnpm 授权执行 `prepare`。
+> 仓库里同时提交了源码（`src/`、`data/`、`tools/`）与构建产物（`client.js`），所以两种安装方式都不需要在安装时跑构建脚本。
 
 ## 数据与分类
 
